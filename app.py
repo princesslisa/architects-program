@@ -60,6 +60,20 @@ def login():
             st.error("Login failed. Please check your email and password.")
 
 
+import datetime
+import pandas as pd
+import streamlit as st
+
+
+def calculate_streak(log_dates, today):
+    streak = 0
+    current_date = today
+    while str(current_date) in log_dates:
+        streak += 1
+        current_date -= datetime.timedelta(days=1)
+    return streak
+
+
 def dashboard():
     st.success("You are logged in.")
 
@@ -71,16 +85,18 @@ def dashboard():
     st.divider()
 
     user_id = st.session_state.user.id
-
-    participant_data = supabase.table("participants").select("*").eq("id", user_id).execute()
-    logs_data = supabase.table("logs").select("log_date").eq("participant_id", user_id).execute()
-
-    log_dates = [log['log_date'] for log in logs_data.data] if logs_data.data else []
     today = datetime.date.today()
 
-    if participant_data.data:
-        p_data = participant_data.data[0]
-        st.subheader(f"Welcome, {p_data.get('full_name', 'Participant')}")
+    participant_data = supabase.table("participants").select("*").eq("id", user_id).execute()
+    p_data = participant_data.data[0] if participant_data.data else {}
+    st.subheader(f"Welcome, {p_data.get('full_name', 'Participant')}")
+
+    # Create tabs for the participant view
+    tab1, tab2 = st.tabs(["My Tracker", "Group Feed"])
+
+    with tab1:
+        logs_data = supabase.table("logs").select("log_date").eq("participant_id", user_id).execute()
+        log_dates = [log['log_date'] for log in logs_data.data] if logs_data.data else []
 
         total_checkins = len(log_dates)
         consistency_score = 0
@@ -102,36 +118,75 @@ def dashboard():
 
         st.write(f"**Current Streak:** {streak_visual}")
 
-        # Displaying metrics in three columns so they all show up properly
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Check-ins", total_checkins)
         col2.metric("Consistency", f"{consistency_score}%")
-        col3.metric("Days Active", len(set(log_dates)))
+        col3.metric("Current Streak", calculate_streak(log_dates, today))
 
-    st.divider()
+        st.divider()
+        st.subheader("Log Your Progress")
+        st.write(f"**Date:** {today.strftime('%B %d, %Y')}")
 
-    st.subheader("Log Your Progress")
-    st.write(f"**Date:** {today.strftime('%B %d, %Y')}")
+        level = st.radio("What level did you hit today?", ["Floor", "Baseline", "Ceiling"], horizontal=True)
+        notes = st.text_area("Any notes? (Optional)")
 
-    level = st.radio("What level did you hit today?", ["Floor", "Baseline", "Ceiling"], horizontal=True)
-    notes = st.text_area("Any notes? (Optional)")
+        if st.button("Submit Check-in"):
+            if str(today) in log_dates:
+                st.warning("You have already submitted a log for today.")
+            else:
+                try:
+                    log_payload = {
+                        "participant_id": user_id,
+                        "log_date": str(today),
+                        "level": level,
+                        "notes": notes
+                    }
+                    supabase.table("logs").insert(log_payload).execute()
+                    st.success("Successfully logged activity for today!")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Failed to save your log. Please try again.")
 
-    if st.button("Submit Check-in"):
-        if str(today) in log_dates:
-            st.warning("You have already submitted a log for today.")
+    with tab2:
+        st.subheader("Today's Check-ins")
+        all_logs = supabase.table("logs").select("*").eq("log_date", str(today)).execute()
+        all_participants = supabase.table("participants").select("*").execute()
+
+        parts_dict = {p['id']: p for p in all_participants.data}
+
+        if all_logs.data:
+            # Open a container to hold the chat feed
+            feed_html = "<div style='display: flex; flex-direction: column; gap: 12px; margin-top: 10px;'>"
+
+            for log in all_logs.data:
+                pid = log['participant_id']
+                if pid in parts_dict:
+                    person = parts_dict[pid]
+                    name = person.get('full_name', 'Someone')
+
+                    start_str = person.get('start_date')
+                    day_number = "XX"
+                    if start_str:
+                        start_d = datetime.datetime.strptime(str(start_str), "%Y-%m-%d").date()
+                        day_number = (today - start_d).days + 1
+
+                    log_level = log.get('level', 'Completed')
+
+                    # Create the individual chat bubble matching your brand colors
+                    bubble = f"""<div style='background-color: #15332b; border-radius: 0px 15px 15px 15px; padding: 12px 16px; width: fit-content; min-width: 200px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);'>
+<div style='color: #D4AF37; font-weight: bold; margin-bottom: 5px; font-family: "Cinzel", serif; font-size: 14px;'>{name}</div>
+<div style='color: #F0F0F0; font-family: "Montserrat", sans-serif; line-height: 1.5; font-size: 15px;'>
+Day {day_number}<br>
+Done✅<br>
+The {log_level}
+</div>
+</div>"""
+                    feed_html += bubble
+
+            feed_html += "</div>"
+            st.markdown(feed_html, unsafe_allow_html=True)
         else:
-            try:
-                log_payload = {
-                    "participant_id": user_id,
-                    "log_date": str(today),
-                    "level": level,
-                    "notes": notes
-                }
-                supabase.table("logs").insert(log_payload).execute()
-                st.success("Successfully logged activity for today!")
-                st.rerun()
-            except Exception as e:
-                st.error("Failed to save your log. Please try again.")
+            st.write("No one has checked in yet today. Be the first.")
 
 
 def admin_dashboard():
@@ -153,74 +208,83 @@ def admin_dashboard():
         return
 
     name_to_id = {p["full_name"]: p["id"] for p in participants if p.get("full_name")}
+    today = datetime.date.today()
 
-    st.subheader("Log on behalf of a participant")
-    selected_name = st.selectbox("Select Participant", list(name_to_id.keys()))
-    selected_date = st.date_input("Select Date", datetime.date.today())
-    level = st.radio("Level", ["Floor", "Baseline", "Ceiling"], horizontal=True)
-    notes = st.text_area("Notes")
+    # Create tabs for the admin view
+    admin_tab1, admin_tab2 = st.tabs(["Group Leaderboard", "Individual Tracker"])
 
-    if st.button("Submit Admin Log"):
+    with admin_tab1:
+        st.subheader("Group Leaderboard Overview")
+        logs_response = supabase.table("logs").select("*").execute()
+
+        if logs_response.data and participants:
+            logs_df = pd.DataFrame(logs_response.data)
+            parts_df = pd.DataFrame(participants)
+
+            log_counts = logs_df.groupby("participant_id").size().reset_index(name="Total Check-ins")
+            leaderboard = pd.merge(parts_df, log_counts, left_on="id", right_on="participant_id", how="left")
+            leaderboard["Total Check-ins"] = leaderboard["Total Check-ins"].fillna(0).astype(int)
+
+            def get_consistency(row):
+                start_str = row.get("start_date")
+                if not start_str or pd.isna(start_str):
+                    return 0
+                start_d = datetime.datetime.strptime(str(start_str), "%Y-%m-%d").date()
+                days = (today - start_d).days + 1
+                if days > 0:
+                    return round((row["Total Check-ins"] / days) * 100, 1)
+                return 0
+
+            def get_streak(row):
+                pid = row["id"]
+                user_logs = logs_df[logs_df["participant_id"] == pid]["log_date"].tolist()
+                return calculate_streak(user_logs, today)
+
+            leaderboard["Consistency %"] = leaderboard.apply(get_consistency, axis=1)
+            leaderboard["Current Streak"] = leaderboard.apply(get_streak, axis=1)
+
+            display_df = leaderboard[
+                ["full_name", "track", "Total Check-ins", "Current Streak", "Consistency %"]].sort_values(
+                by="Consistency %", ascending=False)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+        else:
+            st.write("Not enough data to display the leaderboard yet.")
+
+    with admin_tab2:
+        st.subheader("Manage Individual Participant")
+        selected_name = st.selectbox("Select Participant", list(name_to_id.keys()))
         participant_id = name_to_id[selected_name]
 
-        check_dup = supabase.table("logs").select("*").eq("participant_id", participant_id).eq("log_date",
-                                                                                               str(selected_date)).execute()
+        # Show quick stats for the selected person
+        user_logs_response = supabase.table("logs").select("log_date").eq("participant_id", participant_id).execute()
+        u_log_dates = [log['log_date'] for log in user_logs_response.data] if user_logs_response.data else []
 
-        if len(check_dup.data) > 0:
-            st.warning(f"{selected_name} already has a log for {selected_date}.")
-        else:
-            try:
-                log_payload = {
-                    "participant_id": participant_id,
-                    "log_date": str(selected_date),
-                    "level": level,
-                    "notes": notes
-                }
-                supabase.table("logs").insert(log_payload).execute()
-                st.success(f"Successfully logged activity for {selected_name} on {selected_date}!")
-            except Exception as e:
-                st.error("Failed to save the log.")
+        st.write(f"**Total Logs:** {len(u_log_dates)} | **Current Streak:** {calculate_streak(u_log_dates, today)}")
 
-    st.divider()
-    st.subheader("Group Leaderboard Overview")
+        st.write("---")
+        st.write("Log on their behalf")
+        selected_date = st.date_input("Select Date", today)
+        level = st.radio("Level", ["Floor", "Baseline", "Ceiling"], horizontal=True)
+        notes = st.text_area("Notes")
 
-    logs_response = supabase.table("logs").select("*").execute()
-    logs_df = pd.DataFrame(logs_response.data)
-    parts_df = pd.DataFrame(participants)
+        if st.button("Submit Admin Log"):
+            check_dup = supabase.table("logs").select("*").eq("participant_id", participant_id).eq("log_date",
+                                                                                                   str(selected_date)).execute()
 
-    if not logs_df.empty and not parts_df.empty:
-        log_counts = logs_df.groupby("participant_id").size().reset_index(name="Total Check-ins")
-        leaderboard = pd.merge(parts_df, log_counts, left_on="id", right_on="participant_id", how="left")
-        leaderboard["Total Check-ins"] = leaderboard["Total Check-ins"].fillna(0).astype(int)
-
-        # Calculate Consistency Score for the Admin Table
-        today = datetime.date.today()
-
-        def get_consistency(row):
-            start_str = row.get("start_date")
-            if not start_str or pd.isna(start_str):
-                return 0
-            start_d = datetime.datetime.strptime(str(start_str), "%Y-%m-%d").date()
-            days = (today - start_d).days + 1
-            if days > 0:
-                return round((row["Total Check-ins"] / days) * 100, 1)
-            return 0
-
-        leaderboard["Consistency %"] = leaderboard.apply(get_consistency, axis=1)
-
-        # Display the visual chart
-        st.write("### Total Check-ins by Participant")
-        chart_data = leaderboard.set_index("full_name")["Total Check-ins"]
-        st.bar_chart(chart_data)
-
-        # Display the full table
-        st.write("### Detailed Stats")
-        display_df = leaderboard[["full_name", "track", "Total Check-ins", "Consistency %"]].sort_values(
-            by="Consistency %", ascending=False)
-        st.dataframe(display_df, use_container_width=True)
-    else:
-        st.write("Not enough data to display the leaderboard yet.")
-
+            if len(check_dup.data) > 0:
+                st.warning(f"{selected_name} already has a log for {selected_date}.")
+            else:
+                try:
+                    log_payload = {
+                        "participant_id": participant_id,
+                        "log_date": str(selected_date),
+                        "level": level,
+                        "notes": notes
+                    }
+                    supabase.table("logs").insert(log_payload).execute()
+                    st.success(f"Successfully logged activity for {selected_name} on {selected_date}!")
+                except Exception as e:
+                    st.error("Failed to save the log.")
 
 # Routing logic to show the right screen
 if st.session_state.user is None:
