@@ -28,6 +28,8 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
+
+
 # Set up the page title
 st.title("Annual Architects Program")
 st.markdown("""
@@ -60,10 +62,25 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
+
 # Check if the user is already logged in
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# Check if a password reset code is in the web address
+if "code" in st.query_params:
+    recovery_code = st.query_params["code"]
+    try:
+        # Trade the code for an active login session
+        supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
+
+        # Wipe the code from the address bar so it does not run twice
+        st.query_params.clear()
+
+        # Refresh the page to load the main dashboard
+        st.rerun()
+    except Exception as e:
+        st.error("That reset link has expired or is invalid. Please request a new one.")
 
 def login():
     st.subheader("Participant Login")
@@ -79,6 +96,27 @@ def login():
         except Exception as e:
             st.error("Login failed. Please check your email and password.")
 
+    # Add this right below your existing Login button
+
+    with st.expander("Forgot Password?"):
+        st.write("Enter your email to receive a secure reset link.")
+        reset_email = st.text_input("Account Email", key="reset_email_input")
+
+        if st.button("Send Reset Link"):
+            if reset_email:
+                try:
+                    # Make sure to replace this with your actual live Streamlit URL
+                    app_url = "https://your-app-url.streamlit.app"
+                    supabase.auth.reset_password_email(
+                        reset_email,
+                        options={"redirect_to": app_url}
+                    )
+                    st.success("The reset link has been sent. Please check your inbox.")
+                except Exception as e:
+                    st.error(f"Failed to send the email: {e}")
+            else:
+                st.warning("Please enter your email address first.")
+
 
 def calculate_streak(log_dates, today):
     streak = 0
@@ -91,6 +129,20 @@ def calculate_streak(log_dates, today):
 
 def dashboard():
     st.success("You are logged in.")
+
+    with st.expander("Account Settings & Password Reset"):
+        st.write("If you used a recovery link to get here, please set a new password now.")
+        new_password = st.text_input("Enter New Password", type="password")
+
+        if st.button("Update Password"):
+            if len(new_password) >= 6:
+                try:
+                    supabase.auth.update_user({"password": new_password})
+                    st.success("Your password has been successfully updated.")
+                except Exception as e:
+                    st.error(f"Failed to update password: {e}")
+            else:
+                st.warning("Your password must be at least 6 characters long.")
 
     if st.button("Log Out"):
         supabase.auth.sign_out()
