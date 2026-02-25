@@ -9,7 +9,7 @@ import uuid
 
 
 # The cache command saves this connection so it only runs once
-@st.cache_resource(ttl=3600)
+@st.cache_resource
 def connect_to_google():
     # Setup Google connection
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -207,7 +207,6 @@ def dashboard():
                 st.warning("You have already submitted a log for today.")
             else:
                 try:
-                    # Save to Supabase first
                     log_payload = {
                         "participant_id": user_id,
                         "log_date": str(today),
@@ -216,32 +215,28 @@ def dashboard():
                     }
                     supabase.table("logs").insert(log_payload).execute()
 
-                    try:
-                        # Process the Google Sheets data safely
-                        log_id = uuid.uuid4().hex[:8]
-                        gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
+                    # Generate a random 8-character string to act as the AppSheet Log ID
+                    log_id = uuid.uuid4().hex[:8]
 
-                        # Convert missing values to empty strings to prevent crashes
-                        safe_notes = notes if notes else ""
-                        safe_email = p_data.get('email') if p_data.get('email') else ""
+                    # We use XLOOKUP combined with ROW() to match the email in Column F to the Participants tab
+                    gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
-                        new_row = [
-                            log_id,
-                            str(today),
-                            gs_formula,
-                            level,
-                            safe_notes,
-                            safe_email
-                        ]
+                    new_row = [
+                        log_id,  # Col A: Log ID
+                        str(today),  # Col B: Date
+                        gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
+                        level,  # Col D: Level
+                        notes,  # Col E: Notes
+                        p_data.get('email')  # Col F: Email (Hidden helper column)
+                    ]
 
-                        gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
-                        st.success("Successfully logged activity for today!")
-                        st.rerun()
-                    except Exception as gs_e:
-                        st.error(f"Saved to database, but failed to sync to Google Sheets. Error details: {gs_e}")
+                    # The USER_ENTERED setting tells Google Sheets to actually run the formula instead of pasting it as text
+                    gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
 
-                except Exception as db_e:
-                    st.error(f"Failed to save to the database. Error: {db_e}")
+                    st.success("Successfully logged activity for today!")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Failed to save your log. Please try again.")
 
     with tab2:
         st.subheader("Today's Check-ins")
@@ -373,6 +368,7 @@ def admin_dashboard():
                 st.warning(f"{selected_name} already has a log for {selected_date}.")
             else:
                 try:
+                    # Save to Supabase
                     log_payload = {
                         "participant_id": participant_id,
                         "log_date": str(selected_date),
@@ -380,9 +376,30 @@ def admin_dashboard():
                         "notes": notes
                     }
                     supabase.table("logs").insert(log_payload).execute()
-                    st.success(f"Successfully logged activity for {selected_name} on {selected_date}!")
+
+                    # Find the target participant's email for the Google Sheet formula
+                    target_participant = next((p for p in participants if p["id"] == participant_id), None)
+                    target_email = target_participant.get("email") if target_participant else ""
+
+                    # Save to Google Sheets
+                    log_id = uuid.uuid4().hex[:8]
+                    gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
+
+                    new_row = [
+                        log_id,  # Col A: Log ID
+                        str(selected_date),  # Col B: Date
+                        gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
+                        level,  # Col D: Level
+                        notes,  # Col E: Notes
+                        target_email  # Col F: Email (Hidden helper column)
+                    ]
+
+                    gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
+
+                    st.success(
+                        f"Successfully logged activity for {selected_name} on {selected_date} and synced to Google Sheets!")
                 except Exception as e:
-                    st.error("Failed to save the log.")
+                    st.error(f"Failed to save the log. Error: {e}")
 
 
 # Routing logic to show the right screen
