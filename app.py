@@ -28,7 +28,20 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
+# Check if a password reset code is in the web address
+if "code" in st.query_params:
+    recovery_code = st.query_params["code"]
+    try:
+        # Trade the code for an active login session
+        supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
 
+        # Wipe the code from the address bar so it does not run twice
+        st.query_params.clear()
+
+        # Refresh the page to load the main dashboard
+        st.rerun()
+    except Exception as e:
+        st.error("That reset link has expired or is invalid. Please request a new one.")
 
 # Set up the page title
 st.title("Annual Architects Program")
@@ -66,21 +79,6 @@ h1, h2, h3 {
 # Check if the user is already logged in
 if "user" not in st.session_state:
     st.session_state.user = None
-
-# Check if a password reset code is in the web address
-if "code" in st.query_params:
-    recovery_code = st.query_params["code"]
-    try:
-        # Trade the code for an active login session
-        supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
-
-        # Wipe the code from the address bar so it does not run twice
-        st.query_params.clear()
-
-        # Refresh the page to load the main dashboard
-        st.rerun()
-    except Exception as e:
-        st.error("That reset link has expired or is invalid. Please request a new one.")
 
 def login():
     st.subheader("Participant Login")
@@ -128,7 +126,6 @@ def calculate_streak(log_dates, today):
 
 
 def dashboard():
-    st.success("You are logged in.")
 
     with st.expander("Account Settings & Password Reset"):
         st.write("If you used a recovery link to get here, please set a new password now.")
@@ -143,6 +140,8 @@ def dashboard():
                     st.error(f"Failed to update password: {e}")
             else:
                 st.warning("Your password must be at least 6 characters long.")
+
+    st.success("You are logged in.")
 
     if st.button("Log Out"):
         supabase.auth.sign_out()
