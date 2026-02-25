@@ -9,7 +9,7 @@ import uuid
 
 
 # The cache command saves this connection so it only runs once
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def connect_to_google():
     # Setup Google connection
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
