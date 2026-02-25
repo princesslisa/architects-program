@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 import datetime
 import pandas as pd
 import gspread
@@ -26,7 +26,10 @@ gs_logs_sheet = connect_to_google()
 # Connect to Supabase
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(url, key)
+
+# Force Supabase to use the modern flow so it generates a readable "?code=" link
+opts = ClientOptions(flow_type="pkce")
+supabase: Client = create_client(url, key, options=opts)
 
 # Initialize the user session state immediately
 if "user" not in st.session_state:
