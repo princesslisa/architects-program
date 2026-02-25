@@ -221,13 +221,17 @@ def dashboard():
                     # We use XLOOKUP combined with ROW() to match the email in Column F to the Participants tab
                     gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
+                    # Convert missing values to empty strings to prevent crashes
+                    safe_notes = notes if notes else ""
+                    safe_email = p_data.get('email') if p_data.get('email') else ""
+
                     new_row = [
                         log_id,  # Col A: Log ID
                         str(today),  # Col B: Date
                         gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
                         level,  # Col D: Level
-                        notes,  # Col E: Notes
-                        p_data.get('email')  # Col F: Email (Hidden helper column)
+                        safe_notes,  # Col E: Notes
+                        safe_email  # Col F: Email (Hidden helper column)
                     ]
 
                     # The USER_ENTERED setting tells Google Sheets to actually run the formula instead of pasting it as text
