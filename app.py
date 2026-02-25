@@ -303,8 +303,8 @@ def admin_dashboard():
     name_to_id = {p["full_name"]: p["id"] for p in participants if p.get("full_name")}
     today = datetime.date.today()
 
-    # Create tabs for the admin view
-    admin_tab1, admin_tab2 = st.tabs(["Group Leaderboard", "Individual Tracker"])
+    # Create tabs for the admin view, now including a third tab for today
+    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["Group Leaderboard", "Individual Tracker", "Today's Activity"])
 
     with admin_tab1:
         st.subheader("Group Leaderboard Overview")
@@ -400,6 +400,30 @@ def admin_dashboard():
                         f"Successfully logged activity for {selected_name} on {selected_date} and synced to Google Sheets!")
                 except Exception as e:
                     st.error(f"Failed to save the log. Error: {e}")
+
+        # Add this completely new block for the third tab
+        with admin_tab3:
+            st.subheader(f"Activity for {today.strftime('%B %d, %Y')}")
+
+            # Pull all logs specifically for today
+            today_logs_response = supabase.table("logs").select("*").eq("log_date", str(today)).execute()
+
+            if today_logs_response.data and participants:
+                # Convert the raw data into pandas dataframes
+                t_logs_df = pd.DataFrame(today_logs_response.data)
+                p_df = pd.DataFrame(participants)
+
+                # Merge the logs with the participant data to get their real names
+                today_merged = pd.merge(t_logs_df, p_df, left_on="participant_id", right_on="id", how="left")
+
+                # Pick only the columns we want to show and rename them for the admin view
+                display_today = today_merged[["full_name", "level", "notes"]]
+                display_today.columns = ["Participant Name", "Level Hit", "Notes"]
+
+                st.write(f"**Total Check-ins Today:** {len(today_logs_response.data)}")
+                st.dataframe(display_today, use_container_width=True, hide_index=True)
+            else:
+                st.info("No participants have checked in yet today.")
 
 
 # Routing logic to show the right screen
