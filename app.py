@@ -26,32 +26,33 @@ gs_logs_sheet = connect_to_google()
 # Connect to Supabase
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-
-# Force Supabase to use the modern flow so it generates a readable "?code=" link
-opts = ClientOptions(flow_type="pkce")
-supabase: Client = create_client(url, key, options=opts)
+supabase: Client = create_client(url, key)
 
 # Initialize the user session state immediately
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# Check if a password reset code is in the web address BEFORE drawing any screens
-if "code" in st.query_params:
-    recovery_code = st.query_params["code"]
+# Check if a token_hash is in the web address BEFORE drawing any screens
+if "token_hash" in st.query_params:
+    recovery_token = st.query_params["token_hash"]
     try:
-        # Trade the code for an active login session
-        response = supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
+        # Trade the token hash for an active login session
+        response = supabase.auth.verify_otp({
+            "token_hash": recovery_token,
+            "type": "recovery"
+        })
 
         # Explicitly tell Streamlit the user is now logged in
         st.session_state.user = response.user
 
-        # Wipe the code from the address bar so it does not run twice
+        # Wipe the address bar clean
         st.query_params.clear()
 
         # Refresh the page to load the main dashboard
         st.rerun()
     except Exception as e:
-        st.error("That reset link has expired or is invalid. Please request a new one.")
+        st.error(f"That reset link has expired or is invalid. Error: {e}")
+
 
 # Set up the page title
 st.title("Annual Architects Program")
