@@ -28,12 +28,19 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-# Check if a password reset code is in the web address
+# Initialize the user session state immediately
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# Check if a password reset code is in the web address BEFORE drawing any screens
 if "code" in st.query_params:
     recovery_code = st.query_params["code"]
     try:
         # Trade the code for an active login session
-        supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
+        response = supabase.auth.exchange_code_for_session({"auth_code": recovery_code})
+
+        # Explicitly tell Streamlit the user is now logged in
+        st.session_state.user = response.user
 
         # Wipe the code from the address bar so it does not run twice
         st.query_params.clear()
@@ -76,10 +83,6 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 
-# Check if the user is already logged in
-if "user" not in st.session_state:
-    st.session_state.user = None
-
 def login():
     st.subheader("Participant Login")
     email = st.text_input("Email Address")
@@ -94,8 +97,7 @@ def login():
         except Exception as e:
             st.error("Login failed. Please check your email and password.")
 
-    # Add this right below your existing Login button
-
+    # The forgot password form sits right below the main login button
     with st.expander("Forgot Password?"):
         st.write("Enter your email to receive a secure reset link.")
         reset_email = st.text_input("Account Email", key="reset_email_input")
@@ -103,8 +105,8 @@ def login():
         if st.button("Send Reset Link"):
             if reset_email:
                 try:
-                    # Make sure to replace this with your actual live Streamlit URL
-                    app_url = "https://your-app-url.streamlit.app"
+                    # Update this to match your actual Streamlit web address
+                    app_url = "https://annual-architects-program.streamlit.app/"
                     supabase.auth.reset_password_email(
                         reset_email,
                         options={"redirect_to": app_url}
@@ -126,7 +128,7 @@ def calculate_streak(log_dates, today):
 
 
 def dashboard():
-
+    # Place the password update form at the top of the screen
     with st.expander("Account Settings & Password Reset"):
         st.write("If you used a recovery link to get here, please set a new password now.")
         new_password = st.text_input("Enter New Password", type="password")
