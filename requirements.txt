@@ -1,3 +1,5 @@
 streamlit
 supabase
 pandas
+gspread
+oauth2client

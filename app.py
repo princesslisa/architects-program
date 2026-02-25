@@ -2,6 +2,26 @@ import streamlit as st
 from supabase import create_client, Client
 import datetime
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import json
+import uuid
+
+
+# The cache command saves this connection so it only runs once
+@st.cache_resource
+def connect_to_google():
+    # Setup Google connection
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    # For Streamlit Cloud, you will pull the JSON from st.secrets instead of a file
+    google_creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS_JSON"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds_dict, scope)
+    gs_client = gspread.authorize(creds)
+    return gs_client.open("The Annual Architect (Responses)").worksheet("Logs")
+
+
+# Call the cached function to get your sheet ready
+gs_logs_sheet = connect_to_google()
 
 # Connect to Supabase
 url = st.secrets["SUPABASE_URL"]
@@ -58,11 +78,6 @@ def login():
             st.rerun()
         except Exception as e:
             st.error("Login failed. Please check your email and password.")
-
-
-import datetime
-import pandas as pd
-import streamlit as st
 
 
 def calculate_streak(log_dates, today):
@@ -142,6 +157,25 @@ def dashboard():
                         "notes": notes
                     }
                     supabase.table("logs").insert(log_payload).execute()
+
+                    # Generate a random 8-character string to act as the AppSheet Log ID
+                    log_id = uuid.uuid4().hex[:8]
+
+                    # We use XLOOKUP combined with ROW() to match the email in Column F to the Participants tab
+                    gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
+
+                    new_row = [
+                        log_id,  # Col A: Log ID
+                        str(today),  # Col B: Date
+                        gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
+                        level,  # Col D: Level
+                        notes,  # Col E: Notes
+                        p_data.get('email')  # Col F: Email (Hidden helper column)
+                    ]
+
+                    # The USER_ENTERED setting tells Google Sheets to actually run the formula instead of pasting it as text
+                    gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
+
                     st.success("Successfully logged activity for today!")
                     st.rerun()
                 except Exception as e:
@@ -285,6 +319,7 @@ def admin_dashboard():
                     st.success(f"Successfully logged activity for {selected_name} on {selected_date}!")
                 except Exception as e:
                     st.error("Failed to save the log.")
+
 
 # Routing logic to show the right screen
 if st.session_state.user is None:
