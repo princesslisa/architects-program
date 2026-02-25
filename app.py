@@ -35,6 +35,7 @@ if "user" not in st.session_state:
 # Check if a token_hash is in the web address BEFORE drawing any screens
 if "token_hash" in st.query_params:
     recovery_token = st.query_params["token_hash"]
+
     try:
         # Trade the token hash for an active login session
         response = supabase.auth.verify_otp({
@@ -45,6 +46,7 @@ if "token_hash" in st.query_params:
         # Explicitly tell Streamlit the user is now logged in
         st.session_state.user = response.user
 
+        st.session_state.show_reset_form = True
         # Wipe the address bar clean
         st.query_params.clear()
 
@@ -132,21 +134,6 @@ def calculate_streak(log_dates, today):
 
 
 def dashboard():
-    # Place the password update form at the top of the screen
-    with st.expander("Account Settings & Password Reset"):
-        st.write("If you used a recovery link to get here, please set a new password now.")
-        new_password = st.text_input("Enter New Password", type="password")
-
-        if st.button("Update Password"):
-            if len(new_password) >= 6:
-                try:
-                    supabase.auth.update_user({"password": new_password})
-                    st.success("Your password has been successfully updated.")
-                except Exception as e:
-                    st.error(f"Failed to update password: {e}")
-            else:
-                st.warning("Your password must be at least 6 characters long.")
-
     st.success("You are logged in.")
 
     if st.button("Log Out"):
@@ -382,7 +369,28 @@ def admin_dashboard():
 if st.session_state.user is None:
     login()
 else:
-    # Check if the logged-in email exists in the admins table
+    # If the trigger is active, show the password form at the very top
+    if st.session_state.get("show_reset_form"):
+        st.warning("You used a recovery link. Please set your new password below.")
+        new_password = st.text_input("Enter New Password", type="password", key="universal_reset")
+
+        if st.button("Save New Password"):
+            if len(new_password) >= 6:
+                try:
+                    supabase.auth.update_user({"password": new_password})
+                    st.success("Your password has been successfully updated.")
+
+                    # Turn off the trigger so the form hides itself
+                    st.session_state.show_reset_form = False
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to update password: {e}")
+            else:
+                st.warning("Your password must be at least 6 characters long.")
+
+        st.divider()
+
+    # Continue loading the correct dashboard underneath
     user_email = st.session_state.user.email
     admin_check = supabase.table("admins").select("*").eq("email", user_email).execute()
 
