@@ -32,25 +32,31 @@ supabase: Client = create_client(url, key)
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# Rehydrate the Supabase client so it remembers the session after a rerun
+if "access_token" in st.session_state and "refresh_token" in st.session_state:
+    try:
+        supabase.auth.set_session(st.session_state["access_token"], st.session_state["refresh_token"])
+    except Exception:
+        pass
+
 # Check if a token_hash is in the web address BEFORE drawing any screens
 if "token_hash" in st.query_params:
     recovery_token = st.query_params["token_hash"]
-
     try:
-        # Trade the token hash for an active login session
         response = supabase.auth.verify_otp({
             "token_hash": recovery_token,
             "type": "recovery"
         })
 
-        # Explicitly tell Streamlit the user is now logged in
         st.session_state.user = response.user
 
-        st.session_state.show_reset_form = True
-        # Wipe the address bar clean
-        st.query_params.clear()
+        # Save the tokens so the client survives the page refresh
+        st.session_state["access_token"] = response.session.access_token
+        st.session_state["refresh_token"] = response.session.refresh_token
 
-        # Refresh the page to load the main dashboard
+        st.session_state.show_reset_form = True
+
+        st.query_params.clear()
         st.rerun()
     except Exception as e:
         st.error(f"That reset link has expired or is invalid. Error: {e}")
@@ -99,6 +105,11 @@ def login():
             # Send credentials to Supabase
             response = supabase.auth.sign_in_with_password({"email": email, "password": password})
             st.session_state.user = response.user
+
+            # Save the tokens for standard logins
+            st.session_state["access_token"] = response.session.access_token
+            st.session_state["refresh_token"] = response.session.refresh_token
+
             st.rerun()
         except Exception as e:
             st.error("Login failed. Please check your email and password.")
@@ -139,6 +150,8 @@ def dashboard():
     if st.button("Log Out"):
         supabase.auth.sign_out()
         st.session_state.user = None
+        st.session_state.pop("access_token", None)
+        st.session_state.pop("refresh_token", None)
         st.rerun()
 
     st.divider()
@@ -273,6 +286,8 @@ def admin_dashboard():
     if st.button("Log Out"):
         supabase.auth.sign_out()
         st.session_state.user = None
+        st.session_state.pop("access_token", None)
+        st.session_state.pop("refresh_token", None)
         st.rerun()
 
     st.divider()
