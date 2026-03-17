@@ -466,6 +466,29 @@ def dashboard():
             st.session_state.pop("refresh_token", None)
             st.rerun()
 
+    # Place this directly below your header and logout button columns
+    with st.expander("⚙️ Account Settings & Password Reset"):
+        st.write("Update your password below to secure your account.")
+
+        # We use keys here so Streamlit does not confuse these text boxes with the login page
+        new_password = st.text_input("New Password", type="password", key="dash_new_pass")
+        confirm_password = st.text_input("Confirm New Password", type="password", key="dash_confirm_pass")
+
+        if st.button("Update Password", width='stretch', key="dash_update_btn"):
+            if not new_password or not confirm_password:
+                st.warning("Please fill out both fields.")
+            elif new_password != confirm_password:
+                st.error("Your passwords do not match. Please try again.")
+            elif len(new_password) < 6:
+                st.warning("Your new password must be at least 6 characters long.")
+            else:
+                try:
+                    # Supabase command to update the currently logged-in user
+                    supabase.auth.update_user({"password": new_password})
+                    st.success("Your password has been successfully updated.")
+                except Exception as e:
+                    st.error(f"Failed to update password. Error: {e}")
+
     st.divider()
 
     user_id = st.session_state.user.id
@@ -607,6 +630,29 @@ def admin_dashboard():
             st.session_state.pop("access_token", None)
             st.session_state.pop("refresh_token", None)
             st.rerun()
+
+    # Place this directly below your admin header and logout button
+    with st.expander("⚙️ Account Settings & Password Reset"):
+        st.write("Update your admin password below to secure your account.")
+
+        # The keys here start with 'admin_' to keep them completely separate
+        new_password = st.text_input("New Password", type="password", key="admin_new_pass")
+        confirm_password = st.text_input("Confirm New Password", type="password", key="admin_confirm_pass")
+
+        if st.button("Update Password", width='stretch', key="admin_update_btn"):
+            if not new_password or not confirm_password:
+                st.warning("Please fill out both fields.")
+            elif new_password != confirm_password:
+                st.error("Your passwords do not match. Please try again.")
+            elif len(new_password) < 6:
+                st.warning("Your new password must be at least 6 characters long.")
+            else:
+                try:
+                    # Supabase updates the password for whoever is currently logged in
+                    supabase.auth.update_user({"password": new_password})
+                    st.success("Your admin password has been successfully updated.")
+                except Exception as e:
+                    st.error(f"Failed to update password. Error: {e}")
 
     st.divider()
     st.header("Admin Controls")
