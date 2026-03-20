@@ -430,10 +430,13 @@ def send_confirmation_email(user_email, user_name):
     # Write the plain text body of your email
     body = f"""Hello {user_name},
 
-Thank you for joining the waitlist for Cohort 2 of The Annual Architect Program. 
+Thank you for joining the waitlist for Cohort 2 of The Annual Architect Program. We have received your details and secured your spot in line. 
 
-We have received your details and secured your spot in line. We are currently finalizing the upcoming activities and will notify you the moment applications officially open.
+We are currently finalizing the upcoming activities and will notify you the moment applications officially open.
+
 In the meantime, if you have any friends or family who have been struggling with consistency and meeting their goals, send them the link below and have them join you on the waitlist.
+
+https://annual-architects-program.streamlit.app/
 
 Best regards,
 The Annual Architect Team
