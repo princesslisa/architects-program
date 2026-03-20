@@ -12,6 +12,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
+import plotly.express as px
 
 
 # 1. Force Python to look in the exact same folder as this script
@@ -598,16 +599,33 @@ def login():
 
 
 def calculate_streak(log_dates, today):
+    if not log_dates:
+        return 0
+
     streak = 0
+    missed_days = 0
     current_date = today
+
+    # Convert string dates to actual datetime objects to find the earliest entry
+    parsed_dates = [datetime.datetime.strptime(d, "%Y-%m-%d").date() for d in log_dates]
+    first_log_date = min(parsed_dates)
 
     # If they have not logged today yet, shift the starting point to yesterday
     if str(current_date) not in log_dates:
         current_date -= datetime.timedelta(days=1)
 
-    # Count backward as long as consecutive days are found
-    while str(current_date) in log_dates:
-        streak += 1
+    # Count backward until we reach the very first day they joined the program
+    while current_date >= first_log_date:
+        if str(current_date) in log_dates:
+            streak += 1
+            missed_days = 0
+        else:
+            missed_days += 1
+
+        # If two days in a row are missed, the streak officially ends
+        if missed_days >= 2:
+            break
+
         current_date -= datetime.timedelta(days=1)
 
     return streak
@@ -743,8 +761,11 @@ def dashboard():
     tab1, tab2 = st.tabs(["My Tracker", "Group Feed"])
 
     with tab1:
-        logs_data = supabase.table("logs").select("log_date").eq("participant_id", user_id).execute()
+        # We now select both the date and the level to feed the pie chart
+        logs_data = supabase.table("logs").select("log_date", "level").eq("participant_id", user_id).execute()
+
         log_dates = [log['log_date'] for log in logs_data.data] if logs_data.data else []
+        log_levels = [log['level'] for log in logs_data.data] if logs_data.data else []
 
         total_checkins = len(log_dates)
         consistency_score = 0
@@ -762,7 +783,12 @@ def dashboard():
             if str(check_date) in log_dates:
                 streak_visual += "🟩 "
             else:
-                streak_visual += "⬜ "
+                # If they missed this day but the day prior was logged, it counts as a forgiven day
+                day_before = str(check_date - datetime.timedelta(days=1))
+                if day_before in log_dates:
+                    streak_visual += "🟨 "
+                else:
+                    streak_visual += "⬜ "
 
         st.write(f"**Current Streak:** {streak_visual}")
 
@@ -772,6 +798,50 @@ def dashboard():
         col3.metric("Current Streak", calculate_streak(log_dates, today))
 
         st.divider()
+
+        # --- NEW CHARTS SECTION ---
+        st.subheader("Your Data")
+
+        if start_date_str and log_dates:
+            chart_col1, chart_col2 = st.columns(2)
+
+            with chart_col1:
+                # Build the cumulative line chart
+                date_list = [start_date + datetime.timedelta(days=x) for x in range(days_since_start)]
+                cumulative_data = []
+                running_total = 0
+
+                for d in date_list:
+                    if str(d) in log_dates:
+                        running_total += 1
+                    cumulative_data.append({"Date": d, "Logs": running_total})
+
+                df_cum = pd.DataFrame(cumulative_data)
+                st.write("**Cumulative Progress**")
+                st.line_chart(df_cum.set_index("Date"))
+
+            with chart_col2:
+                # Build the pie chart for levels
+                st.write("**Habit Rescue Breakdown**")
+                df_levels = pd.DataFrame(log_levels, columns=["Level"])
+                level_counts = df_levels["Level"].value_counts().reset_index()
+                level_counts.columns = ["Level", "Count"]
+
+                # Assign specific colors to match your brand and levels
+                color_map = {"Ceiling": "#D4AF37", "Baseline": "#15332b", "Floor": "#8a701e"}
+
+                fig = px.pie(level_counts, values="Count", names="Level", color="Level", color_discrete_map=color_map)
+
+                # Make the background transparent so it blends with your app theme
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+
+                st.plotly_chart(fig, width='stretch')
+        else:
+            st.info("Your charts will appear here once you start logging your days.")
+
+        st.divider()
+        # --- END NEW CHARTS SECTION ---
+
         st.subheader("Log Your Progress")
         st.write(f"**Date:** {today.strftime('%B %d, %Y')}")
 
@@ -792,23 +862,19 @@ def dashboard():
                     }
                     supabase.table("logs").insert(log_payload).execute()
 
-                    # Generate a random 8-character string to act as the AppSheet Log ID
                     log_id = uuid.uuid4().hex[:8]
-
-                    # We use XLOOKUP combined with ROW() to match the email in Column F to the Participants tab
                     gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
                     new_row = [
-                        log_id,  # Col A: Log ID
-                        str(today),  # Col B: Date
-                        gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
-                        level,  # Col D: Level
-                        notes,  # Col E: Notes
-                        p_data.get('email'),  # Col F: Email (Hidden helper column)
-                        "Participant"  # Col G: Logged By
+                        log_id,
+                        str(today),
+                        gs_formula,
+                        level,
+                        notes,
+                        p_data.get('email'),
+                        "Participant"
                     ]
 
-                    # The USER_ENTERED setting tells Google Sheets to actually run the formula instead of pasting it as text
                     gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
 
                     st.success("Successfully logged activity for today!")
@@ -872,11 +938,9 @@ def admin_dashboard():
             st.session_state.pop("refresh_token", None)
             st.rerun()
 
-    # Place this directly below your admin header and logout button
     with st.expander("⚙️ Account Settings & Password Reset"):
         st.write("Update your admin password below to secure your account.")
 
-        # The keys here start with 'admin_' to keep them completely separate
         new_password = st.text_input("New Password", type="password", key="admin_new_pass")
         confirm_password = st.text_input("Confirm New Password", type="password", key="admin_confirm_pass")
 
@@ -889,7 +953,6 @@ def admin_dashboard():
                 st.warning("Your new password must be at least 6 characters long.")
             else:
                 try:
-                    # Supabase updates the password for whoever is currently logged in
                     supabase.auth.update_user({"password": new_password})
                     st.success("Your admin password has been successfully updated.")
                 except Exception as e:
@@ -901,7 +964,6 @@ def admin_dashboard():
     parts_response = supabase.table("participants").select("*").execute()
     participants = parts_response.data
 
-    # Fetch Waitlist data
     waitlist_response = supabase.table("waitlist_form").select("*").order("created_at", desc=True).execute()
     waitlist_data = waitlist_response.data
 
@@ -912,7 +974,6 @@ def admin_dashboard():
     name_to_id = {p["full_name"]: p["id"] for p in participants if p.get("full_name")}
     today = datetime.date.today()
 
-    # Create tabs for the admin view, now including a third tab for today
     admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs([
         "Group Leaderboard",
         "Individual Tracker",
@@ -954,6 +1015,29 @@ def admin_dashboard():
                 ["full_name", "track", "Total Check-ins", "Current Streak", "Consistency %"]].sort_values(
                 by="Consistency %", ascending=False)
             st.dataframe(display_df, width='stretch', hide_index=True)
+
+            st.divider()
+            st.subheader("Cohort Analytics")
+
+            grp_col1, grp_col2 = st.columns(2)
+            with grp_col1:
+                st.write("**Total Cumulative Progress**")
+                daily_counts = logs_df.groupby('log_date').size().reset_index(name='Daily Count')
+                daily_counts['log_date'] = pd.to_datetime(daily_counts['log_date']).dt.date
+                daily_counts = daily_counts.sort_values('log_date')
+                daily_counts['Cumulative'] = daily_counts['Daily Count'].cumsum()
+                st.line_chart(daily_counts.set_index('log_date')['Cumulative'])
+
+            with grp_col2:
+                st.write("**Overall Habit Rescue Breakdown**")
+                group_level_counts = logs_df['level'].value_counts().reset_index()
+                group_level_counts.columns = ['Level', 'Count']
+                color_map = {"Ceiling": "#D4AF37", "Baseline": "#15332b", "Floor": "#8a701e"}
+                fig_group = px.pie(group_level_counts, values="Count", names="Level", color="Level",
+                                   color_discrete_map=color_map)
+                fig_group.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_group, width='stretch')
+
         else:
             st.write("Not enough data to display the leaderboard yet.")
 
@@ -962,11 +1046,44 @@ def admin_dashboard():
         selected_name = st.selectbox("Select Participant", list(name_to_id.keys()))
         participant_id = name_to_id[selected_name]
 
-        # Show quick stats for the selected person
-        user_logs_response = supabase.table("logs").select("log_date").eq("participant_id", participant_id).execute()
+        # Fetch both the date and the level for the specific user
+        user_logs_response = supabase.table("logs").select("log_date", "level").eq("participant_id",
+                                                                                   participant_id).execute()
         u_log_dates = [log['log_date'] for log in user_logs_response.data] if user_logs_response.data else []
+        u_log_levels = [log['level'] for log in user_logs_response.data] if user_logs_response.data else []
 
         st.write(f"**Total Logs:** {len(u_log_dates)} | **Current Streak:** {calculate_streak(u_log_dates, today)}")
+
+        target_p = next((p for p in participants if p["id"] == participant_id), None)
+        start_date_str = target_p.get('start_date') if target_p else None
+
+        if start_date_str and u_log_dates:
+            ind_col1, ind_col2 = st.columns(2)
+            with ind_col1:
+                st.write("**Individual Cumulative Progress**")
+                start_date = datetime.datetime.strptime(str(start_date_str), "%Y-%m-%d").date()
+                days_since = (today - start_date).days + 1
+                date_list = [start_date + datetime.timedelta(days=x) for x in range(days_since)]
+                cum_data = []
+                run_tot = 0
+                for d in date_list:
+                    if str(d) in u_log_dates:
+                        run_tot += 1
+                    cum_data.append({"Date": d, "Logs": run_tot})
+                st.line_chart(pd.DataFrame(cum_data).set_index("Date"))
+
+            with ind_col2:
+                st.write("**Individual Habit Rescue Breakdown**")
+                df_u_levels = pd.DataFrame(u_log_levels, columns=["Level"])
+                u_level_counts = df_u_levels["Level"].value_counts().reset_index()
+                u_level_counts.columns = ["Level", "Count"]
+                color_map = {"Ceiling": "#D4AF37", "Baseline": "#15332b", "Floor": "#8a701e"}
+                fig_u = px.pie(u_level_counts, values="Count", names="Level", color="Level",
+                               color_discrete_map=color_map)
+                fig_u.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_u, width='stretch')
+        else:
+            st.info(f"Charts will appear here once {selected_name} starts logging their days.")
 
         st.write("---")
         st.write("Log on their behalf")
@@ -982,7 +1099,6 @@ def admin_dashboard():
                 st.warning(f"{selected_name} already has a log for {selected_date}.")
             else:
                 try:
-                    # Save to Supabase
                     log_payload = {
                         "participant_id": participant_id,
                         "log_date": str(selected_date),
@@ -992,22 +1108,19 @@ def admin_dashboard():
                     }
                     supabase.table("logs").insert(log_payload).execute()
 
-                    # Find the target participant's email for the Google Sheet formula
-                    target_participant = next((p for p in participants if p["id"] == participant_id), None)
-                    target_email = target_participant.get("email") if target_participant else ""
+                    target_email = target_p.get("email") if target_p else ""
 
-                    # Save to Google Sheets
                     log_id = uuid.uuid4().hex[:8]
                     gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
                     new_row = [
-                        log_id,  # Col A: Log ID
-                        str(selected_date),  # Col B: Date
-                        gs_formula,  # Col C: Formula to fetch the old Google Sheet ID
-                        level,  # Col D: Level
-                        notes,  # Col E: Notes
-                        target_email,  # Col F: Email (Hidden helper column)
-                        "Admin"  # Col G: Logged By
+                        log_id,
+                        str(selected_date),
+                        gs_formula,
+                        level,
+                        notes,
+                        target_email,
+                        "Admin"
                     ]
 
                     gs_logs_sheet.append_row(new_row, value_input_option="USER_ENTERED")
@@ -1017,57 +1130,52 @@ def admin_dashboard():
                 except Exception as e:
                     st.error(f"Failed to save the log. Error: {e}")
 
-        # Add this completely new block for the third tab
-        with admin_tab3:
-            st.subheader(f"Activity for {today.strftime('%B %d, %Y')}")
+    with admin_tab3:
+        st.subheader(f"Activity for {today.strftime('%B %d, %Y')}")
 
-            # Pull all logs specifically for today
-            today_logs_response = supabase.table("logs").select("*").eq("log_date", str(today)).execute()
+        today_logs_response = supabase.table("logs").select("*").eq("log_date", str(today)).execute()
 
-            if today_logs_response.data and participants:
-                # Convert the raw data into pandas dataframes
-                t_logs_df = pd.DataFrame(today_logs_response.data)
-                p_df = pd.DataFrame(participants)
+        if today_logs_response.data and participants:
+            t_logs_df = pd.DataFrame(today_logs_response.data)
+            p_df = pd.DataFrame(participants)
 
-                # Merge the logs with the participant data to get their real names
-                today_merged = pd.merge(t_logs_df, p_df, left_on="participant_id", right_on="id", how="left")
+            today_merged = pd.merge(t_logs_df, p_df, left_on="participant_id", right_on="id", how="left")
 
-                # Pick only the columns we want to show and rename them for the admin view
-                display_today = today_merged[["full_name", "level", "notes"]]
-                display_today.columns = ["Participant Name", "Level Hit", "Notes"]
+            display_today = today_merged[["full_name", "level", "notes"]]
+            display_today.columns = ["Participant Name", "Level Hit", "Notes"]
 
-                st.write(f"**Total Check-ins Today:** {len(today_logs_response.data)}")
-                st.dataframe(display_today, width='stretch', hide_index=True)
-            else:
-                st.info("No participants have checked in yet today.")
+            st.write(f"**Total Check-ins Today:** {len(today_logs_response.data)}")
+            st.dataframe(display_today, width='stretch', hide_index=True)
+        else:
+            st.info("No participants have checked in yet today.")
 
-        with admin_tab4:
-            st.subheader("Cohort 2 Waitlist Management")
+    with admin_tab4:
+        st.subheader("Cohort 2 Waitlist Management")
 
-            if waitlist_data:
-                # Show a high-level metric for total count
-                total_waitlist = len(waitlist_data)
-                st.metric("Total People on Waitlist", total_waitlist)
+        if waitlist_data:
+            total_waitlist = len(waitlist_data)
+            st.metric("Total People on Waitlist", total_waitlist)
 
-                # Convert to DataFrame for easy viewing
-                df_waitlist = pd.DataFrame(waitlist_data)
+            df_waitlist = pd.DataFrame(waitlist_data)
 
-                # Clean up columns for display
+            if "gender" in df_waitlist.columns:
                 display_waitlist = df_waitlist[["full_name", "gender", "email", "phone", "reason", "created_at"]]
                 display_waitlist.columns = ["Name", "Gender", "Email", "Phone", "Why they want to join", "Signed Up At"]
-
-                st.dataframe(display_waitlist, width='stretch', hide_index=True)
-
-                # Add a button to download the list as a CSV for your records
-                csv = display_waitlist.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download Waitlist as CSV",
-                    data=csv,
-                    file_name=f"cohort_2_waitlist_{datetime.date.today()}.csv",
-                    mime="text/csv",
-                )
             else:
-                st.info("No one has joined the waitlist yet. Time to share the link.")
+                display_waitlist = df_waitlist[["full_name", "email", "phone", "reason", "created_at"]]
+                display_waitlist.columns = ["Name", "Email", "Phone", "Why they want to join", "Signed Up At"]
+
+            st.dataframe(display_waitlist, width='stretch', hide_index=True)
+
+            csv = display_waitlist.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Waitlist as CSV",
+                data=csv,
+                file_name=f"cohort_2_waitlist_{datetime.date.today()}.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No one has joined the waitlist yet. Time to share the link.")
 
 
 # Routing logic to show the right screen
