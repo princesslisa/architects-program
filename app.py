@@ -8,6 +8,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import uuid
+import re
 
 
 # 1. Force Python to look in the exact same folder as this script
@@ -445,30 +446,36 @@ def waitlist_page():
                 submit = st.form_submit_button("Join Waitlist", type="primary")
 
                 if submit:
-                    if name and email and phone and reason:
-                        try:
-                            current_time = str(datetime.datetime.now())
+                    if name and email and phone and reason and gender:
 
-                            payload = {
-                                "full_name": name,
-                                "gender": gender,
-                                "email": email,
-                                "phone": phone,
-                                "reason": reason,
-                                "created_at": current_time
-                            }
+                        # Define the pattern for a standard email address
+                        email_pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
 
-                            # Keep the returning="minimal" to prevent read errors
-                            supabase.table("waitlist_form").insert(payload, returning="minimal").execute()
+                        # Check if the input matches the pattern
+                        if not re.match(email_pattern, email):
+                            st.error("Please enter a valid email address.")
+                        else:
+                            try:
+                                current_time = str(datetime.datetime.now())
 
-                            new_row = [current_time, name, gender, email, phone, reason]
-                            gs_waitlist_sheet.append_row(new_row)
+                                payload = {
+                                    "full_name": name,
+                                    "gender": gender,
+                                    "email": email,
+                                    "phone": phone,
+                                    "reason": reason,
+                                    "created_at": current_time
+                                }
 
-                            # 3. Flip the switch to true and reload the page
-                            st.session_state.waitlist_submitted = True
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error saving to waitlist: {e}")
+                                supabase.table("waitlist_form").insert(payload, returning="minimal").execute()
+
+                                new_row = [current_time, name, gender, email, phone, reason]
+                                gs_waitlist_sheet.append_row(new_row)
+
+                                st.session_state.waitlist_submitted = True
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving to waitlist: {e}")
                     else:
                         st.warning("Please fill out all fields.")
 
