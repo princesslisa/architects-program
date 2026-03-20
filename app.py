@@ -232,12 +232,7 @@ def landing_page():
     """
     st.markdown(data_context, unsafe_allow_html=True)
 
-
-    graph_col1, graph_col2 = st.columns(2)
-    with graph_col1:
-        st.image("progress_chart.png", caption="Cumulative progress over 90 days", width='stretch')
-    with graph_col2:
-        st.image("pie_chart.png", caption="Habit Rescue Breakdown", width='stretch')
+    st.image("progress_chart.jpg", caption="Cumulative progress over 90 days", width='stretch')
 
     st.divider()
 
