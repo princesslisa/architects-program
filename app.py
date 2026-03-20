@@ -530,8 +530,15 @@ def waitlist_page():
                                 error_msg = str(e).lower()
                                 # We check the error text to see if it is a unique constraint violation
                                 if "duplicate key value" in error_msg or "unique constraint" in error_msg or "23505" in error_msg:
-                                    st.info(
-                                        "It looks like this email is already on the waitlist. We will notify you when applications open.")
+                                    if "phone" in error_msg:
+                                        st.info(
+                                            "It looks like this phone number is already on the waitlist. We will notify you when applications open.")
+                                    elif "email" in error_msg:
+                                        st.info(
+                                            "It looks like this email is already on the waitlist. We will notify you when applications open.")
+                                    else:
+                                        st.info(
+                                            "It looks like you are already on the waitlist. We will notify you when applications open.")
                                 else:
                                     st.error("There was an issue saving your details. Please try again.")
                     else:
