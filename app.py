@@ -895,7 +895,7 @@ def admin_dashboard():
     participants = parts_response.data
 
     # Fetch Waitlist data
-    waitlist_response = supabase.table("waitlist").select("*").order("created_at", desc=True).execute()
+    waitlist_response = supabase.table("waitlist_form").select("*").order("created_at", desc=True).execute()
     waitlist_data = waitlist_response.data
 
     if not participants:
@@ -1047,7 +1047,7 @@ def admin_dashboard():
 
                 # Clean up columns for display
                 display_waitlist = df_waitlist[["full_name", "gender", "email", "phone", "reason", "created_at"]]
-                display_waitlist.columns = ["Name", "Gender","Email", "Phone", "Why they want to join", "Signed Up At"]
+                display_waitlist.columns = ["Name", "Gender", "Email", "Phone", "Why they want to join", "Signed Up At"]
 
                 st.dataframe(display_waitlist, width='stretch', hide_index=True)
 
