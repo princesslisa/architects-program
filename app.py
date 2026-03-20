@@ -527,7 +527,13 @@ def waitlist_page():
                                 st.session_state.waitlist_submitted = True
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error saving to waitlist: {e}")
+                                error_msg = str(e).lower()
+                                # We check the error text to see if it is a unique constraint violation
+                                if "duplicate key value" in error_msg or "unique constraint" in error_msg or "23505" in error_msg:
+                                    st.info(
+                                        "It looks like this email is already on the waitlist. We will notify you when applications open.")
+                                else:
+                                    st.error("There was an issue saving your details. Please try again.")
                     else:
                         st.warning("Please fill out all fields.")
 
