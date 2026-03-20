@@ -237,7 +237,7 @@ def landing_page():
     st.divider()
 
     # --- TWO-ROW TESTIMONIAL SECTION ---
-    st.markdown("<center><h2 style='color: #D4AF37;'>Member Experiences</h2></center>", unsafe_allow_html=True)
+    st.markdown("<center><h2 style='color: #D4AF37;'>Testimonials</h2></center>", unsafe_allow_html=True)
 
     data_context = """
         <div style='max-width: 1100px; margin: 0 auto; text-align: center; margin-bottom: 25px; font-size: 1.2rem; line-height: 1.6;'>
@@ -258,7 +258,7 @@ def landing_page():
     row1_col1, row1_col2, row1_col3 = st.columns(3)
     with row1_col1:
         st.markdown(create_testimonial_card(
-            "I've fallen in love with studying the word and Jesus. I was addicted to K-dramas. I haven't watched any through out this period. I now wake up and read my Bible first thing in the morning",
+            "I've fallen in love with studying the word and Jesus. I was addicted to K-dramas. I haven't watched any through out this period. I now wake up and read my Bible first thing in the morning.",
             "C.N."
         ), unsafe_allow_html=True)
     with row1_col2:
@@ -282,12 +282,12 @@ def landing_page():
     with row2_col2:
         st.markdown(create_testimonial_card(
             "Regardless of how exhausted I am, I'm able to hit the floor thanks to what we learned during the pre-program sessions. I may get carried away but now I'm so conscious of it I have set reminders and I don't snooze them. I can't believe I've been able to come this far."
-            "At the beginning, I didn't think 90 days was possible",
+            "At the beginning, I didn't think 90 days was possible.",
             "O.N."
         ), unsafe_allow_html=True)
     with row2_col3:
         st.markdown(create_testimonial_card(
-            "Because of the structure, I have been able to organize my time and set proper schedules as any delay or lazy activity would affect my sleep time and impact my commitment. I started a 30 day challenge of code writing. Previously I wouldn't even get to day 7 but I'm on day 18. It's amazing ",
+            "Because of the structure, I have been able to organize my time and set proper schedules as any delay or lazy activity would affect my sleep time and impact my commitment. I started a 30 day challenge of code writing. Previously I wouldn't even get to day 7 but I'm on day 18. It's amazing.",
             "T.S"
         ), unsafe_allow_html=True)
 
