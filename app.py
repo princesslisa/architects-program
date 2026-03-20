@@ -8,6 +8,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import re
 
 
@@ -414,6 +417,41 @@ def signup_page():
                         st.error(f"Failed to create your account. Error: {e}")
 
 
+def send_confirmation_email(user_email, user_name):
+    sender_email = st.secrets["EMAIL_ADDRESS"]
+    sender_password = st.secrets["EMAIL_APP_PASSWORD"]
+
+    # Construct the email headers and subject
+    msg = MIMEMultipart()
+    msg['From'] = f"The Annual Architect <{sender_email}>"
+    msg['To'] = user_email
+    msg['Subject'] = "You are on the list - The Annual Architect"
+
+    # Write the plain text body of your email
+    body = f"""Hello {user_name},
+
+Thank you for joining the waitlist for Cohort 2 of The Annual Architect Program. 
+
+We have received your details and secured your spot in line. We are currently finalizing the upcoming activities and will notify you the moment applications officially open.
+In the meantime, if you have any friends or family who have been struggling with consistency and meeting their goals, send them the link below and have them join you on the waitlist.
+
+Best regards,
+The Annual Architect Team
+"""
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # Connect to Google's mail server and send the message
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+    except Exception as e:
+        # We print the error to the console rather than the screen so the user does not see technical errors if the email fails
+        print(f"Failed to send email to {user_email}: {e}")
+
+
 def waitlist_page():
     left, center, right = st.columns([1, 2, 1])
 
@@ -479,6 +517,9 @@ def waitlist_page():
 
                                 new_row = [current_time, name, gender, email, phone, reason]
                                 gs_waitlist_sheet.append_row(new_row)
+
+                                # Call the new email function here
+                                send_confirmation_email(email, name)
 
                                 st.session_state.waitlist_submitted = True
                                 st.rerun()
