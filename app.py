@@ -31,7 +31,7 @@ st.set_page_config(page_title="The Annual Architect", layout="wide")
 
 # The cache command saves this connection so it only runs once
 @st.cache_resource
-def connect_to_google():
+def connect_to_google_workbooks():
     # Setup Google connection
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     # For Streamlit Cloud, you will pull the JSON from st.secrets instead of a file
@@ -47,7 +47,7 @@ def connect_to_google():
 
 
 # Call the cached function to get your sheet ready
-gs_document, gs_waitlist_document = connect_to_google()
+gs_document, gs_waitlist_document = connect_to_google_workbooks()
 
 # Assign the specific tabs to their own variables
 gs_logs_sheet = gs_document.worksheet("Logs")
