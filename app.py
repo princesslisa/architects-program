@@ -38,16 +38,21 @@ def connect_to_google():
     google_creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS_JSON"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds_dict, scope)
     gs_client = gspread.authorize(creds)
-    # Return the entire document instead of just one specific tab
-    return gs_client.open("The Annual Architect (Responses)")
+
+    # Open both documents
+    main_doc = gs_client.open("The Annual Architect (Responses)")
+    waitlist_doc = gs_client.open("The Annual Architect - Cohort 2")
+
+    return main_doc, waitlist_doc
 
 
 # Call the cached function to get your sheet ready
-gs_document = connect_to_google()
+gs_document, gs_waitlist_document = connect_to_google()
 
 # Assign the specific tabs to their own variables
 gs_logs_sheet = gs_document.worksheet("Logs")
 gs_registrations_sheet = gs_document.worksheet("Registrations")
+gs_waitlist_sheet = gs_waitlist_document.worksheet("Waitlist")
 
 # Connect to Supabase
 url = st.secrets["SUPABASE_URL"]
@@ -164,42 +169,137 @@ else:
 
 
 def landing_page():
-    st.markdown("<center><h1 style='font-size: 3rem;'>The Annual Architect Program</h1></center>", unsafe_allow_html=True)
+    # --- TOP HEADER BAR ---
+    # We create a thin row at the top. The empty left column pushes the buttons to the right.
+    head_left, head_login, head_waitlist = st.columns([7, 1, 1.5])
+
+    with head_login:
+        if st.button("Log In", key="top_login", width='stretch'):
+            st.session_state.current_page = "login"
+            st.rerun()
+
+    with head_waitlist:
+        # We use a primary button to make the waitlist stand out
+        if st.button("Join Waitlist", type="primary", key="top_waitlist", width='stretch'):
+            st.session_state.current_page = "waitlist"
+            st.rerun()
+
+    # --- HERO SECTION ---
+    st.markdown("<center><h1 style='font-size: 3rem; margin-top: 10px;'>The Annual Architect Program</h1></center>",
+                unsafe_allow_html=True)
     st.markdown("<center><h3 style='margin-bottom: 2rem; color: #D4AF37;'>Build Systems That Last</h3></center>",
                 unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # --- THE PROBLEM SECTION (Withholding the Solution) ---
+    intro_left, intro_center, intro_right = st.columns([1, 4, 1])
 
-    with col2:
+    with intro_center:
         st.write(
-            "Welcome to the community. This space is designed for people who want to build daily routines and stick to "
-            "them. We use a simple structure to track progress across four main areas and have carefully put together"
-            " activities to keep you on track throughout.")
+            "Setting a goal is easy, but maintaining the daily routine required to reach it seems incredibly difficult. Most tracking methods fail because they demand absolute perfection.")
 
         st.markdown("""
-        Here is how the system works:
-        * You choose one core area to focus on for the next 90 days.
-        * You complete all the pre-program activities to guide you for the next 90 days.
-        * You log your activity every single day to build a visual streak.
-        * You monitor the group feed to stay accountable alongside the rest of the members.
-        * You rely on steady routines instead of waiting for motivation.
+        Traditional accountability makes you falls apart as:
+        * A single missed day triggers a cycle of guilt that makes high performers abandon their goals entirely.
+        * Current applications assume progress is an unbroken line and punish you for taking a rest.
+        * Group chats become noisy distractions and end up as "just another WhatsApp group" rather than helpful support networks.
+        * People are forced to rely on external motivation, which fades quickly when life gets busy.
         """)
 
-        st.divider()
+        st.write(
+            "We approach human behavior differently. Our program provides a quiet environment and "
+            "a strict framework that accounts for normal human error. "
+            "We give you the structure required to keep moving forward, especially on the days you feel exhausted.")
 
-        st.info(
-            "Already have an account? Please log in to access your dashboard. If you are new here, click Sign Up to submit your application.")
+    st.divider()
 
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            if st.button("Log In", width='stretch'):
-                st.session_state.current_page = "login"
-                st.rerun()
-        with btn_col2:
-            if st.button("Sign Up", width='stretch'):
-                st.session_state.current_page = "signup"
-                st.rerun()
+    # --- EXPANDED DATA SECTION ---
+    st.markdown("<center><h2 style='color: #D4AF37;'>The Data</h2></center>", unsafe_allow_html=True)
 
+    # Adding more context using HTML to control the paragraph width so it reads well
+    data_context = """
+    <div style='max-width: 1100px; margin: 0 auto; text-align: center; margin-bottom: 25px; font-size: 1.2rem; line-height: 1.6;'>
+        Our tracking system actively protects you from the shame cycle. We have analyzed the daily logs of our current 
+        participants, and the numbers show exactly why our approach works.
+        <p>Thirty-seven percent of all recorded actions are 'Floor' days. These are the days our members were completely 
+        exhausted but used our specific protocol to rescue their habit instead of breaking their streak. </p>
+        <p>The graphs below illustrate this cumulative progress and the actual breakdown of user engagement.</p>
+    </div>
+    """
+    st.markdown(data_context, unsafe_allow_html=True)
+
+
+    graph_col1, graph_col2 = st.columns(2)
+    with graph_col1:
+        st.image("progress_chart.png", caption="Cumulative progress over 90 days", width='stretch')
+    with graph_col2:
+        st.image("pie_chart.png", caption="Habit Rescue Breakdown", width='stretch')
+
+    st.divider()
+
+    # --- TWO-ROW TESTIMONIAL SECTION ---
+    st.markdown("<center><h2 style='color: #D4AF37;'>Member Experiences</h2></center>", unsafe_allow_html=True)
+
+    data_context = """
+        <div style='max-width: 1100px; margin: 0 auto; text-align: center; margin-bottom: 25px; font-size: 1.2rem; line-height: 1.6;'>
+            Don't believe it? Hear what the participants have to say...</p>
+        </div>
+        """
+    st.markdown(data_context, unsafe_allow_html=True)
+
+    def create_testimonial_card(quote, author):
+        return f"""
+        <div style='background-color: #15332b; border-left: 4px solid #D4AF37; padding: 20px; margin-bottom: 20px; border-radius: 4px; height: 100%;'>
+            <p style='font-style: italic; color: #F0F0F0;'>"{quote}"</p>
+            <p style='color: #D4AF37; font-weight: bold; text-align: right;'>- {author}</p>
+        </div>
+        """
+
+    # First Row of Testimonials
+    row1_col1, row1_col2, row1_col3 = st.columns(3)
+    with row1_col1:
+        st.markdown(create_testimonial_card(
+            "I've fallen in love with studying the word and Jesus. I was addicted to K-dramas. I haven't watched any through out this period. I now wake up and read my Bible first thing in the morning",
+            "C.N."
+        ), unsafe_allow_html=True)
+    with row1_col2:
+        st.markdown(create_testimonial_card(
+            "Where do I start? It has helped me to maintain a consistent fellowship with God despite my feelings or moods. At the beginning of the year, I usually want to improve my relationship with God but I never make it past the 7th day. I can't believe how well it has been.",
+            "U.U"
+        ), unsafe_allow_html=True)
+    with row1_col3:
+        st.markdown(create_testimonial_card(
+            "The program has given me a clearer understanding of my personality and generally increased my level of self awareness.",
+            "O.E."
+        ), unsafe_allow_html=True)
+
+    # Second Row of Testimonials
+    row2_col1, row2_col2, row2_col3 = st.columns(3)
+    with row2_col1:
+        st.markdown(create_testimonial_card(
+            "I showed up for an entire week which has been impossible up until this point.",
+            "F.A."
+        ), unsafe_allow_html=True)
+    with row2_col2:
+        st.markdown(create_testimonial_card(
+            "Regardless of how exhausted I am, I'm able to hit the floor thanks to what we learned during the pre-program sessions. I may get carried away but now I'm so conscious of it I have set reminders and I don't snooze them. I can't believe I've been able to come this far."
+            "At the beginning, I didn't think 90 days was possible",
+            "O.N."
+        ), unsafe_allow_html=True)
+    with row2_col3:
+        st.markdown(create_testimonial_card(
+            "Because of the structure, I have been able to organize my time and set proper schedules as any delay or lazy activity would affect my sleep time and impact my commitment. I started a 30 day challenge of code writing. Previously I wouldn't even get to day 7 but I'm on day 18. It's amazing ",
+            "T.S"
+        ), unsafe_allow_html=True)
+
+    st.divider()
+
+    # --- BOTTOM CALL TO ACTION ---
+    out_left, out_center, out_right = st.columns([1, 2, 1])
+    with out_center:
+        st.info("Ready to stop starting over and build consistency? Join the waitlist for our next cohort.")
+        if st.button("Join the Waitlist", key="bottom_waitlist", width='stretch'):
+            st.session_state.current_page = "waitlist"
+            st.rerun()
 
 def signup_page():
     # Use the same column ratio to keep the width uniform across pages
@@ -311,6 +411,73 @@ def signup_page():
                         st.success("Registration successful! Please click 'Back to Home' and log in with your new password to access the pre-program activities.")
                     except Exception as e:
                         st.error(f"Failed to create your account. Error: {e}")
+
+
+def waitlist_page():
+    left, center, right = st.columns([1, 2, 1])
+
+    with center:
+        # We also reset the submission state if they click back, just in case
+        if st.button("← Back to Home"):
+            st.session_state.current_page = "landing"
+            st.session_state.waitlist_submitted = False
+            st.rerun()
+
+        st.markdown("<h1 style='color: #D4AF37; text-align: center;'>Join the Next Cohort</h1>", unsafe_allow_html=True)
+
+        # 1. Initialize the memory switch
+        if "waitlist_submitted" not in st.session_state:
+            st.session_state.waitlist_submitted = False
+
+        # 2. If they have not submitted yet, show the form
+        if not st.session_state.waitlist_submitted:
+            st.write(
+                "Enter your details below to secure your spot in line. We will notify you the moment applications open.")
+
+            with st.form("waitlist_form"):
+                name = st.text_input("Full Name")
+                email = st.text_input("Email Address")
+                phone = st.text_input("Phone Number")
+                reason = st.text_area("Why do you want to join this program?")
+
+                # Make the button visually distinct using the primary type
+                submit = st.form_submit_button("Join Waitlist", type="primary")
+
+                if submit:
+                    if name and email and phone and reason:
+                        try:
+                            current_time = str(datetime.datetime.now())
+
+                            payload = {
+                                "full_name": name,
+                                "email": email,
+                                "phone": phone,
+                                "reason": reason,
+                                "created_at": current_time
+                            }
+
+                            # Keep the returning="minimal" to prevent read errors
+                            supabase.table("waitlist_form").insert(payload, returning="minimal").execute()
+
+                            new_row = [current_time, name, email, phone, reason]
+                            gs_waitlist_sheet.append_row(new_row)
+
+                            # 3. Flip the switch to true and reload the page
+                            st.session_state.waitlist_submitted = True
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error saving to waitlist: {e}")
+                    else:
+                        st.warning("Please fill out all fields.")
+
+        # 4. If the switch is true, ONLY show the success message
+        else:
+            st.success("Thank you! Your spot on the waitlist is secured. We will reach out soon.")
+
+            # Give them a way to submit another person if needed
+            if st.button("Submit Another Response"):
+                st.session_state.waitlist_submitted = False
+                st.rerun()
 
 
 def login():
@@ -660,6 +827,10 @@ def admin_dashboard():
     parts_response = supabase.table("participants").select("*").execute()
     participants = parts_response.data
 
+    # Fetch Waitlist data
+    waitlist_response = supabase.table("waitlist").select("*").order("created_at", desc=True).execute()
+    waitlist_data = waitlist_response.data
+
     if not participants:
         st.info("No participants found.")
         return
@@ -668,7 +839,12 @@ def admin_dashboard():
     today = datetime.date.today()
 
     # Create tabs for the admin view, now including a third tab for today
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["Group Leaderboard", "Individual Tracker", "Today's Activity"])
+    admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs([
+        "Group Leaderboard",
+        "Individual Tracker",
+        "Today's Activity",
+        "Cohort 2 Waitlist"
+    ])
 
     with admin_tab1:
         st.subheader("Group Leaderboard Overview")
@@ -791,6 +967,34 @@ def admin_dashboard():
             else:
                 st.info("No participants have checked in yet today.")
 
+        with admin_tab4:
+            st.subheader("Cohort 2 Waitlist Management")
+
+            if waitlist_data:
+                # Show a high-level metric for total count
+                total_waitlist = len(waitlist_data)
+                st.metric("Total People on Waitlist", total_waitlist)
+
+                # Convert to DataFrame for easy viewing
+                df_waitlist = pd.DataFrame(waitlist_data)
+
+                # Clean up columns for display
+                display_waitlist = df_waitlist[["full_name", "email", "phone", "reason", "created_at"]]
+                display_waitlist.columns = ["Name", "Email", "Phone", "Why they want to join", "Signed Up At"]
+
+                st.dataframe(display_waitlist, width='stretch', hide_index=True)
+
+                # Add a button to download the list as a CSV for your records
+                csv = display_waitlist.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Waitlist as CSV",
+                    data=csv,
+                    file_name=f"cohort_2_waitlist_{datetime.date.today()}.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.info("No one has joined the waitlist yet. Time to share the link.")
+
 
 # Routing logic to show the right screen
 if st.session_state.user is None:
@@ -800,6 +1004,8 @@ if st.session_state.user is None:
         login()
     elif st.session_state.current_page == "signup":
         signup_page()
+    elif st.session_state.current_page == "waitlist":
+        waitlist_page()
 else:
     # If the trigger is active, show the password form at the very top
     if st.session_state.get("show_reset_form"):
