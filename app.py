@@ -436,6 +436,7 @@ def waitlist_page():
 
             with st.form("waitlist_form"):
                 name = st.text_input("Full Name")
+                gender = st.radio("Gender", ["Female", "Male"], horizontal=True)
                 email = st.text_input("Email Address")
                 phone = st.text_input("Phone Number")
                 reason = st.text_area("Why do you want to join this program?")
@@ -450,6 +451,7 @@ def waitlist_page():
 
                             payload = {
                                 "full_name": name,
+                                "gender": gender,
                                 "email": email,
                                 "phone": phone,
                                 "reason": reason,
@@ -459,7 +461,7 @@ def waitlist_page():
                             # Keep the returning="minimal" to prevent read errors
                             supabase.table("waitlist_form").insert(payload, returning="minimal").execute()
 
-                            new_row = [current_time, name, email, phone, reason]
+                            new_row = [current_time, name, gender, email, phone, reason]
                             gs_waitlist_sheet.append_row(new_row)
 
                             # 3. Flip the switch to true and reload the page
@@ -979,8 +981,8 @@ def admin_dashboard():
                 df_waitlist = pd.DataFrame(waitlist_data)
 
                 # Clean up columns for display
-                display_waitlist = df_waitlist[["full_name", "email", "phone", "reason", "created_at"]]
-                display_waitlist.columns = ["Name", "Email", "Phone", "Why they want to join", "Signed Up At"]
+                display_waitlist = df_waitlist[["full_name", "gender", "email", "phone", "reason", "created_at"]]
+                display_waitlist.columns = ["Name", "Gender","Email", "Phone", "Why they want to join", "Signed Up At"]
 
                 st.dataframe(display_waitlist, width='stretch', hide_index=True)
 
