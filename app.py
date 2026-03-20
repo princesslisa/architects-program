@@ -451,9 +451,17 @@ def waitlist_page():
                         # Define the pattern for a standard email address
                         email_pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
 
+                        # This pattern looks for an optional + followed by 10 to 15 digits
+                        phone_pattern = r'^\+?[0-9]{10,15}$'
+
+                        # Clean the input by removing spaces and dashes before checking
+                        clean_phone = phone.replace(" ", "").replace("-", "")
+
                         # Check if the input matches the pattern
                         if not re.match(email_pattern, email):
                             st.error("Please enter a valid email address.")
+                        elif not re.match(phone_pattern, clean_phone):
+                            st.error("Please enter a valid phone number containing 10 to 15 digits.")
                         else:
                             try:
                                 current_time = str(datetime.datetime.now())
