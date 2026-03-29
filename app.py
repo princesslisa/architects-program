@@ -31,7 +31,7 @@ def get_base64_image(file_path):
 logo_text = get_base64_image(logo_path)
 
 
-st.set_page_config(page_title="The Annual Architect", page_icon="logo.png", layout="wide")
+st.set_page_config(page_title="The Annual Architect", page_icon=logo_path, layout="wide")
 
 
 # The cache command saves this connection so it only runs once
@@ -108,9 +108,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;600&display=swap');
 
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+
 
 /* Pull the whole page up to reduce empty white space at the top */
 .block-container {
@@ -149,6 +147,11 @@ h1, h2, h3 {
     letter-spacing: 1px;
     border-radius: 4px;
 }
+
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
 </style>
 """, unsafe_allow_html=True)
 
