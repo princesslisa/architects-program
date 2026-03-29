@@ -56,11 +56,6 @@ def connect_to_google_workbooks():
 # Call the cached function to get your sheet ready
 gs_document, gs_waitlist_document = connect_to_google_workbooks()
 
-# Assign the specific tabs to their own variables
-gs_logs_sheet = gs_document.worksheet("Logs")
-gs_registrations_sheet = gs_document.worksheet("Registrations")
-gs_waitlist_sheet = gs_waitlist_document.worksheet("Waitlist")
-
 # Connect to Supabase
 url = os.environ["SUPABASE_URL"]
 key = os.environ["SUPABASE_KEY"]
@@ -403,6 +398,7 @@ def signup_page():
                         supabase.table("registrations").insert(reg_payload).execute()
 
                         # 3. Save to Google Sheets
+                        gs_registrations_sheet = gs_document.worksheet("Registrations")
                         new_row = [
                             current_time,
                             name,
@@ -523,6 +519,7 @@ def waitlist_page():
 
                                 supabase.table("waitlist_form").insert(payload, returning="minimal").execute()
 
+                                gs_waitlist_sheet = gs_waitlist_document.worksheet("Waitlist")
                                 new_row = [current_time, name, gender, email, phone, reason]
                                 gs_waitlist_sheet.append_row(new_row)
 
@@ -869,6 +866,7 @@ def dashboard():
                     log_id = uuid.uuid4().hex[:8]
                     gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
+                    gs_logs_sheet = gs_document.worksheet("Logs")
                     new_row = [
                         log_id,
                         str(today),
@@ -1117,6 +1115,7 @@ def admin_dashboard():
                     log_id = uuid.uuid4().hex[:8]
                     gs_formula = '=XLOOKUP(INDIRECT("F"&ROW()), Participants!J:J, Participants!I:I, "")'
 
+                    gs_logs_sheet = gs_document.worksheet("Logs")
                     new_row = [
                         log_id,
                         str(selected_date),
