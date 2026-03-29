@@ -39,8 +39,10 @@ st.set_page_config(page_title="The Annual Architect", layout="wide")
 def connect_to_google_workbooks():
     # Setup Google connection
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    # For Streamlit Cloud, you will pull the JSON from st.secrets instead of a file
-    google_creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS_JSON"])
+
+    # Pull directly from Render's environment variables
+    google_creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
+
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_creds_dict, scope)
     gs_client = gspread.authorize(creds)
 
@@ -60,8 +62,8 @@ gs_registrations_sheet = gs_document.worksheet("Registrations")
 gs_waitlist_sheet = gs_waitlist_document.worksheet("Waitlist")
 
 # Connect to Supabase
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
+url = os.environ["SUPABASE_URL"]
+key = os.environ["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 # Initialize the user session state immediately
@@ -414,8 +416,8 @@ def signup_page():
 
 
 def send_confirmation_email(user_email, user_name):
-    sender_email = st.secrets["EMAIL_ADDRESS"]
-    sender_password = st.secrets["EMAIL_APP_PASSWORD"]
+    sender_email = os.environ["EMAIL_ADDRESS"]
+    sender_password = os.environ["EMAIL_APP_PASSWORD"]
 
     # Construct the email headers and subject
     msg = MIMEMultipart()
